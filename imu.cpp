@@ -123,9 +123,9 @@ bool imu_init()
   delay(1); // config update time (datasheet typical)
 
   // Ranges (leave as-is unless you want different sensitivity)
-  wr8(REG_ACC_RANGE, 0x03); // ±2g
+  wr8(REG_ACC_RANGE, 0x03); // +/-2g
   delay(1); // config update time (datasheet typical)
-  wr8(REG_GYR_RANGE, 0x00); // ±2000 dps
+  wr8(REG_GYR_RANGE, 0x00); // +/-2000 dps
   delay(1); // config update time (datasheet typical)
 
   return true;
