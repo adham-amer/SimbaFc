@@ -12,7 +12,8 @@ static constexpr uint32_t SPI_HZ = 10000000; // BMI160 supports up to 10 MHz
 static constexpr uint8_t  SPI_MODE = SPI_MODE0;
 static constexpr uint8_t  SPI_READ = 0x80;
 
-// Use FSPI on ESP32-S3 Arduino core
+// Use FSPI on ESP32-S3 Arduino core   
+//test
 static SPIClass imuSpi(FSPI);
 
 // ====== BMI160 REGISTERS / COMMANDS ======
