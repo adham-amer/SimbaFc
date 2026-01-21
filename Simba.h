@@ -15,6 +15,10 @@ extern bfs::SbusData data;
 extern Adafruit_NeoPixel led;
 extern bool builtInLedOn;
 extern Color color;
+void ledOn(Color _color,uint8_t brightness_);
+void ledOff();
+void ledBlink(Color _color,uint8_t brightness_,uint8_t _ticksDivider);
+void ledTick();
 
 
 // Timer flags

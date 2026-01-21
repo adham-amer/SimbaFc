@@ -10,6 +10,7 @@ bfs::SbusData data;
 // Built-in LED
 Adafruit_NeoPixel led(kNumLeds, kLedPin, NEO_GRB + NEO_KHZ800);
 Color color=kColorCritical;
+uint8_t brightness = 50;
 
 
 //filter
@@ -80,18 +81,49 @@ void setLedTickDivider(uint32_t divider) { // divider must be power of two
 
 
 bool begun =false;
-bool builtInLedOn = false;
-void builtInLed(uint8_t brightness) {
+bool LedOn = false;
+bool _ledblink = false;
+void ledTick() {
 	if (!begun) {
 		led.begin();
     begun=true;
 	}
-  if (brightness==0) {
-    builtInLedOn=false;
-  } else {
-    builtInLedOn=true;
+
+  if (_ledblink) {
+    if (LedOn) {
+      ledOff();
+      LedOn = false;
+    } else {
+      ledOn(color, brightness);
+      LedOn = true;
+    }
   }
+  	
+}
+
+void ledBlink(Color _color,uint8_t brightness_,uint8_t _ticksDivider) {
+  setLedTickDivider(_ticksDivider);
+  color=_color;
+  brightness=brightness_;
+  _ledblink = true;
+}
+void ledOn(Color _color,uint8_t brightness_) {
+  color=_color;
+	if (!begun) {
+		led.begin();
+    begun=true;
+	}
+   brightness=brightness_;
   	led.setBrightness(brightness);
+  	led.setPixelColor(0, led.Color(color.r, color.g, color.b)); 
+  	led.show();
+}
+void ledOff() {
+	if (!begun) {
+		led.begin();
+    begun=true;
+	}
+  	led.setBrightness(0);
   	led.setPixelColor(0, led.Color(color.r, color.g, color.b)); 
   	led.show();
 }

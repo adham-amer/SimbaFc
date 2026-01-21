@@ -7,18 +7,19 @@ uint32_t lastTimeUs = 0;
 
 
 void setup() {
+  setupTimer();
   Serial.begin(115200);
   delay(100);
 
   //InitIMU();
-  color = kColorInitializing;
-  setLedTickDivider(256);
+  ledBlink(kColorWarning, 50, 32);
+  
   sbus_rx.Begin();
 
-  setupTimer();
+  
 
   imu_init();
-
+  ledBlink(kColorSafe, 50, 512);
 
 
 //Serial.print(rd8(0x03));
@@ -45,7 +46,7 @@ void loop() {
 
   if (LEDF) {
     LEDF=false;
-    builtInLed((!builtInLedOn) *50);
+    ledTick();
     
   }
 
