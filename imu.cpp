@@ -77,7 +77,7 @@ bool imu_init()
 {
   pinMode(kImuCsPin, OUTPUT);
   csHigh();
-
+  
   // Start SPI on custom pins
   imuSpi.begin(kImuSckPin, kImuMisoPin, kImuMosiPin, kImuCsPin);
 

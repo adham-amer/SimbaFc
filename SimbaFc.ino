@@ -11,7 +11,8 @@ void setup() {
   delay(100);
 
   //InitIMU();
-
+  color = kColorInitializing;
+  setLedTickDivider(256);
   sbus_rx.Begin();
 
   setupTimer();
@@ -44,7 +45,17 @@ void loop() {
 
   if (LEDF) {
     LEDF=false;
-    builtInLed(200,200,0,(!builtInLedOn) *50);
+    builtInLed((!builtInLedOn) *50);
+    
+  }
+
+  if (RXDF & 0) {
+    RXDF=false;
+    //sbus_rx.Read(&data);
+  }
+  if (TXDF) {
+    TXDF=false;
+
     Serial.print("Time:");
     Serial.print(dt_s * 1000.0f);
     Serial.print(",");
