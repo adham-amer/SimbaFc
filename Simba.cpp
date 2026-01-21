@@ -1,45 +1,14 @@
 #include "Simba.h"
 
 
-//Reciver
-bfs::SbusRx sbus_rx(&Serial1,SBUS_RX_PIN,SBUS_TX_PIN,true,false);
+// Receiver
+bfs::SbusRx sbus_rx(&Serial1, kSbusRxPin, kSbusTxPin, true, false);
 bfs::SbusData data;
 
 
 
-//BUILT-IN LED
-Adafruit_NeoPixel led(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
-
-
-//IMU
-//const int MPU = 0x68; // MPU6050 I2C address
-
-
-  /*
-  Wire.beginTransmission(MPU);       // Start communication with MPU6050 // MPU=0x68
-  Wire.write(0x6B);                  // Talk to the register 6B
-  Wire.write(0x00);                  // Make reset - place a 0 into the 6B register
-  Wire.endTransmission(true);
-  
-    
-  // Configure Accelerometer Sensitivity - Full Scale Range (default +/- 2g)
-  Wire.beginTransmission(MPU);
-  Wire.write(0x1C);                  //Talk to the ACCEL_CONFIG register (1C hex)
-  Wire.write(0x10);                  //Set the register bits as 00010000 (+/- 8g full scale range)
-  Wire.endTransmission(true);
-  // Configure Gyro Sensitivity - Full Scale Range (default +/- 250deg/s)
-  Wire.beginTransmission(MPU);
-  Wire.write(0x1B);                   // Talk to the GYRO_CONFIG register (1B hex)
-  Wire.write(0x10);                   // Set the register bits as 00010000 (1000deg/s full scale)
-  Wire.endTransmission(true);
-  delay(20);
-  */
-
-
-
-
-
-
+// Built-in LED
+Adafruit_NeoPixel led(kNumLeds, kLedPin, NEO_GRB + NEO_KHZ800);
 
 
 //filter
@@ -59,7 +28,7 @@ void IRAM_ATTR timerCall() {
   Ticks++;
   
 
-  if ((Ticks % 10) == 0) {
+  if ((Ticks % kLedTickDivider) == 0) { // slow LED update
     LEDF=true;
   }
 
@@ -67,9 +36,9 @@ void IRAM_ATTR timerCall() {
 }
 
 void setupTimer() {
-  timer0 = timerBegin(1000000); // Timer freq
+  timer0 = timerBegin(kTimerHz); // Timer freq
   timerAttachInterrupt(timer0, &timerCall);
-  timerAlarm(timer0,1000,true,0); //Inturrupts every 1000 ticks
+  timerAlarm(timer0, kTimerAlarmTicks, true, 0); // interrupts every 1000 ticks
   timerStart(timer0);
 }
 

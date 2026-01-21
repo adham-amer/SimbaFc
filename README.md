@@ -1,6 +1,10 @@
 # SimbaFc
 ESP32 Flight controller
 
+Notes:
+- Board pins and timing live in `config.h`.
+- IMU SPI/BMI160 driver lives in `imu.cpp` and `imu.h`.
+
 Init Sequ ---- low level
 
 02 7e b6 //soft reset
