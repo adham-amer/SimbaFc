@@ -9,8 +9,8 @@ struct Color {
 };
 
 // ====== BOARD PINS ======
-constexpr uint8_t kSbusRxPin = 10;
-constexpr uint8_t kSbusTxPin = 11;
+constexpr uint8_t kSbusRxPin = 9;
+constexpr uint8_t kSbusTxPin = 8;
 
 constexpr uint8_t kLedPin = 48;
 constexpr uint8_t kNumLeds = 1;

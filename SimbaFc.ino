@@ -19,7 +19,9 @@ void setup() {
   
 
   imu_init();
-  ledBlink(kColorSafe, 50, 512);
+  ledBlink(kColorInitializing, 50, 64);
+  imu_calibrate();
+  ledBlink(kColorInitializing, 50, 512);
 
 
 //Serial.print(rd8(0x03));
@@ -52,6 +54,11 @@ void loop() {
 
   if (RXDF & 0) {
     RXDF=false;
+    if (sbus_rx.Read()) {
+    /* Grab the received data */
+    data = sbus_rx.data();
+    //post 16 channels
+    }
     //sbus_rx.Read(&data);
   }
   if (TXDF) {
@@ -60,6 +67,12 @@ void loop() {
     Serial.print("Time:");
     Serial.print(dt_s * 1000.0f);
     Serial.print(",");
+    
+    for (int i = 0; i < 8; i++) {
+      Serial.print(data.ch[i]);
+      Serial.print(",");
+    }
+    
     Serial.print(filter.getRoll());
     Serial.print(",");
     Serial.print(filter.getPitch());

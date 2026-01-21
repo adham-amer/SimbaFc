@@ -9,3 +9,4 @@ struct ImuSample {
 
 bool imu_init();
 bool imu_read(ImuSample& out);
+void imu_calibrate();
