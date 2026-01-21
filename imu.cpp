@@ -72,6 +72,9 @@ static inline int16_t le16(const uint8_t* p)
   return (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
 }
 
+static ImuSample g_offsets = {};
+static bool g_hasOffsets = false;
+
 // ====== PUBLIC API ======
 bool imu_init()
 {
@@ -129,7 +132,7 @@ bool imu_init()
   return true;
 }
 
-bool imu_read(ImuSample& out)
+static bool imu_readRaw(ImuSample& out)
 {
   // Burst gyro+accel in one transaction: 12 bytes from 0x0C..0x17
   uint8_t buf[12];
@@ -143,5 +146,48 @@ bool imu_read(ImuSample& out)
   out.ay = le16(&buf[8]);
   out.az = le16(&buf[10]);
 
+  return true;
+}
+
+void imu_calibrate()
+{
+  delay(2000);
+
+  constexpr int kSamples = 600;
+  int64_t ax = 0, ay = 0, az = 0;
+  int64_t gx = 0, gy = 0, gz = 0;
+
+  ImuSample s;
+  for (int i = 0; i < kSamples; ++i) {
+    imu_readRaw(s);
+    ax += s.ax;
+    ay += s.ay;
+    az += s.az;
+    gx += s.gx;
+    gy += s.gy;
+    gz += s.gz;
+    delay(1);
+  }
+
+  g_offsets.ax = static_cast<int16_t>(ax / kSamples);
+  g_offsets.ay = static_cast<int16_t>(ay / kSamples);
+  g_offsets.az = static_cast<int16_t>(az / kSamples);
+  g_offsets.gx = static_cast<int16_t>(gx / kSamples);
+  g_offsets.gy = static_cast<int16_t>(gy / kSamples);
+  g_offsets.gz = static_cast<int16_t>(gz / kSamples);
+  g_hasOffsets = true;
+}
+
+bool imu_read(ImuSample& out)
+{
+  if (!imu_readRaw(out)) return false;
+  if (!g_hasOffsets) return true;
+
+  out.ax = static_cast<int16_t>(out.ax - g_offsets.ax);
+  out.ay = static_cast<int16_t>(out.ay - g_offsets.ay);
+  out.az = static_cast<int16_t>(out.az - g_offsets.az);
+  out.gx = static_cast<int16_t>(out.gx - g_offsets.gx);
+  out.gy = static_cast<int16_t>(out.gy - g_offsets.gy);
+  out.gz = static_cast<int16_t>(out.gz - g_offsets.gz);
   return true;
 }
