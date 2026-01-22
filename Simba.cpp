@@ -16,8 +16,18 @@ uint8_t brightness = 50;
 //filter
 Madgwick filter;
 
+uint32_t lastTimeUs = 0;
+float rollOffset = 0.0f;
+float pitchOffset = 0.0f;
+float yawOffset = 0.0f;
 
 
+
+extern bool USB = false;
+
+
+//Commands from Transmitter like Arm, calibrate, etc
+uint pushCounter = 0;
 
 //timer inturupts
 volatile bool PIDF=false;
@@ -118,6 +128,18 @@ void ledOn(Color _color,uint8_t brightness_) {
   	led.setPixelColor(0, led.Color(color.r, color.g, color.b)); 
   	led.show();
 }
+void ledcOn(Color _color,uint8_t brightness_) {
+  color=_color;
+  _ledblink = false;
+	if (!begun) {
+		led.begin();
+    begun=true;
+	}
+   brightness=brightness_;
+  	led.setBrightness(brightness);
+  	led.setPixelColor(0, led.Color(color.r, color.g, color.b)); 
+  	led.show();
+}
 void ledOff() {
 	if (!begun) {
 		led.begin();
@@ -126,4 +148,41 @@ void ledOff() {
   	led.setBrightness(0);
   	led.setPixelColor(0, led.Color(color.r, color.g, color.b)); 
   	led.show();
+}
+
+
+void zeroAttitude() {
+  rollOffset = filter.getRoll();
+  pitchOffset = filter.getPitch();
+  yawOffset = filter.getYaw();
+}
+
+void settleFilter(uint16_t samples, uint16_t delayMs) {
+  ImuSample tmp;
+  for (uint16_t i = 0; i < samples; ++i) {
+    imu_read(tmp);
+    filter.updateIMU(
+      convertRawGyro(tmp.gx), convertRawGyro(tmp.gy), convertRawGyro(tmp.gz),
+      convertRawAcceleration(tmp.ax), convertRawAcceleration(tmp.ay), convertRawAcceleration(tmp.az)
+    );
+    delay(delayMs);
+  }
+}
+
+float convertRawAcceleration(int aRaw) {
+  // since we are using 2G range
+  // -2g maps to a raw value of -32768
+  // +2g maps to a raw value of 32767
+  
+  float a = (aRaw * 2.0) / 32768.0;
+  return a;
+}
+
+float convertRawGyro(int gRaw) {
+  // since we are using 250 degrees/seconds range
+  // -250 maps to a raw value of -32768
+  // +250 maps to a raw value of 32767
+  
+  float g = (gRaw * 2000.0) / 32768.0;
+  return g;
 }

@@ -1,31 +1,36 @@
 #include "Simba.h"
-#include "imu.h"
-
-
-uint32_t lastTimeUs = 0;
-
 
 
 
 void setup() {
   setupTimer();
+
+  ledcOn(kColorInitializing, 50);
   Serial.begin(115200);
+  int x =0;
+  while (!Serial) {
+    ledTick();
+    delay(10);
+    x++;
+    if (x>100) break;
+  }
+
+  if (x < 100) {
+    USB = true;
+  }
+
   delay(100);
 
-  //InitIMU();
-  ledBlink(kColorWarning, 50, 32);
-  
-  
-
-  
-
+  ledcOn(kColorInitializing, 50);
   imu_init();
-  ledBlink(kColorInitializing, 50, 64);
-  imu_calibrate();
-  ledBlink(kColorInitializing, 50, 512);
-  sbus_rx.Begin();
 
-//Serial.print(rd8(0x03));
+
+  ledcOn(kColorWarning, 50);
+  imu_calibrate();
+  settleFilter(200, 1);
+  zeroAttitude();
+  
+  sbus_rx.Begin();
   lastTimeUs = micros();
 }
 
@@ -50,21 +55,40 @@ void loop() {
   if (LEDF) {
     LEDF=false;
     ledTick();
-    
   }
 
   if (RXDF) {
     RXDF=false;
     if (sbus_rx.Read()) {
+      if (USB) {
+        ledBlink(kColorData, 10, 32);
+      }else{
+        ledBlink(kColorData, 90, 32);
+      }
+    
     /* Grab the received data */
     data = sbus_rx.data();
     //post 16 channels
+      if (data.ch[6] > 1500) {
+        pushCounter++;
+        if (pushCounter > 64) {
+          //calibrate IMU
+          pushCounter=0;
+          ledcOn(kColorWarning, 50);
+          imu_calibrate();
+          settleFilter(200, 1);
+          zeroAttitude();
+          
+        }
+      }else{
+        pushCounter=0;
+      }
     }
-    //sbus_rx.Read(&data);
+    
   }
-  if (TXDF) {
+  if (TXDF && USB) {
     TXDF=false;
-
+    
     Serial.print("Time:");
     Serial.print(dt_s * 1000.0f);
     Serial.print(",");
@@ -74,31 +98,14 @@ void loop() {
       Serial.print(",");
     }
     
-    Serial.print(filter.getRoll());
+    Serial.print(filter.getRoll() - rollOffset);
     Serial.print(",");
-    Serial.print(filter.getPitch());
+    Serial.print(filter.getPitch() - pitchOffset);
     Serial.print(",");
-    Serial.println(filter.getYaw());
+    Serial.println(filter.getYaw() - yawOffset);
   }
   
 }
 
 
 
-float convertRawAcceleration(int aRaw) {
-  // since we are using 2G range
-  // -2g maps to a raw value of -32768
-  // +2g maps to a raw value of 32767
-  
-  float a = (aRaw * 2.0) / 32768.0;
-  return a;
-}
-
-float convertRawGyro(int gRaw) {
-  // since we are using 250 degrees/seconds range
-  // -250 maps to a raw value of -32768
-  // +250 maps to a raw value of 32767
-  
-  float g = (gRaw * 2000.0) / 32768.0;
-  return g;
-}

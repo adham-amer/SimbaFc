@@ -21,7 +21,7 @@ constexpr Color kColorInitializing = {0, 0, 255};
 constexpr Color kColorCalibrating = {0, 0, 255};
 constexpr Color kColorSafe        = {0, 200, 0};
 constexpr Color kColorData        = {200, 200, 0};
-constexpr Color kColorWarning     = {255, 120, 0};
+constexpr Color kColorWarning     = {255, 75, 0};
 
 // If SBUS and IMU share pins on your board, update these to avoid conflicts.
 constexpr uint8_t kImuSckPin  = 13;

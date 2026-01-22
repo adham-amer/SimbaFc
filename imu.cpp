@@ -154,6 +154,8 @@ void imu_calibrate()
   delay(2000);
 
   constexpr int kSamples = 600;
+  constexpr int16_t kAccel1g = 16384; // +/-2g range => 1g = 16384 LSB
+  constexpr int8_t kAccelZSign = 1;   // +1 if Z points up at rest, -1 if Z points down
   int64_t ax = 0, ay = 0, az = 0;
   int64_t gx = 0, gy = 0, gz = 0;
 
@@ -171,7 +173,7 @@ void imu_calibrate()
 
   g_offsets.ax = static_cast<int16_t>(ax / kSamples);
   g_offsets.ay = static_cast<int16_t>(ay / kSamples);
-  g_offsets.az = static_cast<int16_t>(az / kSamples);
+  g_offsets.az = static_cast<int16_t>((az / kSamples) - (kAccelZSign * kAccel1g));
   g_offsets.gx = static_cast<int16_t>(gx / kSamples);
   g_offsets.gy = static_cast<int16_t>(gy / kSamples);
   g_offsets.gz = static_cast<int16_t>(gz / kSamples);
