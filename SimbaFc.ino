@@ -6,6 +6,7 @@ uint32_t lastTimeUs = 0;
 
 
 
+
 void setup() {
   setupTimer();
   Serial.begin(115200);
@@ -14,7 +15,7 @@ void setup() {
   //InitIMU();
   ledBlink(kColorWarning, 50, 32);
   
-  sbus_rx.Begin();
+  
 
   
 
@@ -22,7 +23,7 @@ void setup() {
   ledBlink(kColorInitializing, 50, 64);
   imu_calibrate();
   ledBlink(kColorInitializing, 50, 512);
-
+  sbus_rx.Begin();
 
 //Serial.print(rd8(0x03));
   lastTimeUs = micros();
@@ -52,7 +53,7 @@ void loop() {
     
   }
 
-  if (RXDF & 0) {
+  if (RXDF) {
     RXDF=false;
     if (sbus_rx.Read()) {
     /* Grab the received data */
