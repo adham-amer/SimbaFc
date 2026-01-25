@@ -44,6 +44,34 @@ extern float rollOffset;
 extern float pitchOffset;
 extern float yawOffset;
 
+enum class ControlMode : uint8_t {
+  RateIncrement = 0,
+  Stabilized = 1,
+  AttitudeSwitch = 2
+};
+
+struct PidState {
+  float kp;
+  float ki;
+  float kd;
+  float integ;
+  float prevErr;
+  float outMin;
+  float outMax;
+};
+
+extern ControlMode activeMode;
+extern float desiredRollDeg;
+extern float desiredPitchDeg;
+extern float rollCmd;
+extern float pitchCmd;
+extern Config gConfig;
+
+float updatePid(PidState& pid, float error, float dt_s);
+ControlMode decodeMode(uint16_t ch);
+float normalizeSbus(uint16_t ch);
+void updateControl(float dt_s);
+void applyConfig();
 
 void zeroAttitude() ;
 
@@ -53,6 +81,8 @@ float convertRawAcceleration(int aRaw);
 
 float convertRawGyro(int gRaw) ;
 
+bool loadConfig();
+void saveConfig();
 
 
 //Commands from Transmitter like Arm, calibrate, etc
@@ -62,4 +92,3 @@ extern uint pushCounter;
 
 void setupTimer();
 void setLedTickDivider(uint32_t divider);
-

@@ -40,3 +40,42 @@ constexpr uint8_t txTickDivider = 32; // receiver out update rate divider
 // ====== IMU SPI ======
 constexpr uint32_t kImuSpiHz = 10000000; // BMI160 supports up to 10 MHz
 constexpr uint8_t kImuSpiMode = SPI_MODE0;
+
+// ====== CONTROL / SBUS ======
+constexpr uint16_t kSbusMin = 172;
+constexpr uint16_t kSbusMax = 1811;
+constexpr uint16_t kSbusCenter = 992;
+constexpr uint8_t kChRoll = 3;
+constexpr uint8_t kChPitch = 2;
+constexpr uint8_t kChYaw = 1;
+constexpr uint8_t kChThrottle = 0;
+constexpr uint8_t kChMode = 8; // 3-position switch
+
+// Attitude control tuning (degrees)
+constexpr float kMaxAttitudeDeg = 35.0f;
+constexpr float kMode1RateDegPerSec = 60.0f;
+constexpr float kMode3StickThreshold = 0.75f; // normalized stick, 0..1
+
+// PID gains (roll/pitch)
+constexpr float kRollKp = 4.0f;
+constexpr float kRollKi = 0.8f;
+constexpr float kRollKd = 0.08f;
+constexpr float kPitchKp = 4.0f;
+constexpr float kPitchKi = 0.8f;
+constexpr float kPitchKd = 0.08f;
+constexpr float kPidOutputMin = -90.0f;
+constexpr float kPidOutputMax = 90.0f;
+
+struct Config {
+  float rollKp;
+  float rollKi;
+  float rollKd;
+  float pitchKp;
+  float pitchKi;
+  float pitchKd;
+  float maxAttitudeDeg;
+  float mode1RateDegPerSec;
+  float mode3StickThreshold;
+  float pidOutputMin;
+  float pidOutputMax;
+};

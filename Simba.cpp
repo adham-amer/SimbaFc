@@ -1,4 +1,6 @@
 #include "Simba.h"
+#include <Preferences.h>
+#include <math.h>
 
 
 // Receiver
@@ -20,6 +22,26 @@ uint32_t lastTimeUs = 0;
 float rollOffset = 0.0f;
 float pitchOffset = 0.0f;
 float yawOffset = 0.0f;
+
+Config gConfig = {
+  kRollKp, kRollKi, kRollKd,
+  kPitchKp, kPitchKi, kPitchKd,
+  kMaxAttitudeDeg,
+  kMode1RateDegPerSec,
+  kMode3StickThreshold,
+  kPidOutputMin,
+  kPidOutputMax
+};
+
+ControlMode activeMode = ControlMode::Stabilized;
+float desiredRollDeg = 0.0f;
+float desiredPitchDeg = 0.0f;
+float rollCmd = 0.0f;
+float pitchCmd = 0.0f;
+
+// Roll/pitch PID controllers operate on attitude error in degrees and output normalized commands.
+static PidState rollPid = {gConfig.rollKp, gConfig.rollKi, gConfig.rollKd, 0.0f, 0.0f, gConfig.pidOutputMin, gConfig.pidOutputMax};
+static PidState pitchPid = {gConfig.pitchKp, gConfig.pitchKi, gConfig.pitchKd, 0.0f, 0.0f, gConfig.pidOutputMin, gConfig.pidOutputMax};
 
 
 
@@ -87,6 +109,132 @@ void setLedTickDivider(uint32_t divider) { // divider must be power of two
     return;
   }
   kLedTickMask = divider - 1;
+}
+
+static float clampf(float v, float lo, float hi) {
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v;
+}
+
+void applyConfig() {
+  rollPid.kp = gConfig.rollKp;
+  rollPid.ki = gConfig.rollKi;
+  rollPid.kd = gConfig.rollKd;
+  pitchPid.kp = gConfig.pitchKp;
+  pitchPid.ki = gConfig.pitchKi;
+  pitchPid.kd = gConfig.pitchKd;
+
+  rollPid.outMin = gConfig.pidOutputMin;
+  rollPid.outMax = gConfig.pidOutputMax;
+  pitchPid.outMin = gConfig.pidOutputMin;
+  pitchPid.outMax = gConfig.pidOutputMax;
+
+  rollPid.integ = 0.0f;
+  pitchPid.integ = 0.0f;
+  rollPid.prevErr = 0.0f;
+  pitchPid.prevErr = 0.0f;
+}
+
+bool loadConfig() {
+  Preferences prefs;
+  prefs.begin("simba", true);
+  size_t read = prefs.getBytes("cfg", &gConfig, sizeof(gConfig));
+  prefs.end();
+  return read == sizeof(gConfig);
+}
+
+void saveConfig() {
+  Preferences prefs;
+  prefs.begin("simba", false);
+  prefs.putBytes("cfg", &gConfig, sizeof(gConfig));
+  prefs.end();
+}
+
+// Convert raw SBUS channel to a normalized stick value in [-1, 1].
+float normalizeSbus(uint16_t ch) {
+  if (ch >= kSbusCenter) {
+    return clampf((static_cast<float>(ch) - kSbusCenter) / (kSbusMax - kSbusCenter), -1.0f, 1.0f);
+  }
+  return clampf((static_cast<float>(ch) - kSbusCenter) / (kSbusCenter - kSbusMin), -1.0f, 1.0f);
+}
+
+// Map a 3-position switch to control modes.
+ControlMode decodeMode(uint16_t ch) {
+  if (ch < 1200) return ControlMode::RateIncrement;
+  if (ch < 1600) return ControlMode::Stabilized;
+  return ControlMode::AttitudeSwitch;
+}
+
+// PID update with simple anti-windup: clamp the integral so output stays in range.
+float updatePid(PidState& pid, float error, float dt_s) {
+  if (dt_s <= 0.0f) return 0.0f;
+  pid.integ += error * dt_s;
+  if (pid.ki > 0.0f) {
+    float integMin = pid.outMin / pid.ki;
+    float integMax = pid.outMax / pid.ki;
+    pid.integ = clampf(pid.integ, integMin, integMax);
+  }
+  float deriv = (error - pid.prevErr) / dt_s;
+  pid.prevErr = error;
+
+  float out = (pid.kp * error) + (pid.ki * pid.integ) + (pid.kd * deriv);
+  return clampf(out, pid.outMin, pid.outMax);
+}
+
+// Main control update: compute desired attitude from sticks and run PID.
+void updateControl(float dt_s) {
+  if (dt_s <= 0.0f) return;
+
+  ControlMode newMode = ControlMode::Stabilized;//decodeMode(data.ch[kChMode]);
+  if (newMode != activeMode) {
+    activeMode = newMode;
+    // Reset integrators when switching modes to avoid sudden output jumps.
+    rollPid.integ = 0.0f;
+    pitchPid.integ = 0.0f;
+    rollPid.prevErr = 0.0f;
+    pitchPid.prevErr = 0.0f;
+    // Start setpoints from current attitude for smooth mode transitions.
+    desiredRollDeg = filter.getRoll() - rollOffset;
+    desiredPitchDeg = filter.getPitch() - pitchOffset;
+  }
+
+  float stickRoll = normalizeSbus(data.ch[kChRoll]);
+  float stickPitch = normalizeSbus(data.ch[kChPitch]);
+  float rollDeg = filter.getRoll() - rollOffset;
+  float pitchDeg = filter.getPitch() - pitchOffset;
+
+  // Mode behavior:
+  // - RateIncrement: sticks add to desired attitude (rate-based).
+  // - Stabilized: sticks command absolute attitude directly.
+  // - AttitudeSwitch: stabilized until stick exceeds threshold, then rate.
+  switch (activeMode) {
+    case ControlMode::RateIncrement:
+      desiredRollDeg += stickRoll * gConfig.mode1RateDegPerSec * dt_s;
+      desiredPitchDeg += stickPitch * gConfig.mode1RateDegPerSec * dt_s;
+      break;
+    case ControlMode::Stabilized:
+      desiredRollDeg = stickRoll * gConfig.maxAttitudeDeg;
+      desiredPitchDeg = stickPitch * gConfig.maxAttitudeDeg;
+      break;
+    case ControlMode::AttitudeSwitch:
+      if (fabsf(stickRoll) > gConfig.mode3StickThreshold || fabsf(stickPitch) > gConfig.mode3StickThreshold) {
+        desiredRollDeg += stickRoll * gConfig.mode1RateDegPerSec * dt_s;
+        desiredPitchDeg += stickPitch * gConfig.mode1RateDegPerSec * dt_s;
+      } else {
+        desiredRollDeg = stickRoll * gConfig.maxAttitudeDeg;
+        desiredPitchDeg = stickPitch * gConfig.maxAttitudeDeg;
+      }
+      break;
+  }
+
+  desiredRollDeg = clampf(desiredRollDeg, -gConfig.maxAttitudeDeg, gConfig.maxAttitudeDeg);
+  desiredPitchDeg = clampf(desiredPitchDeg, -gConfig.maxAttitudeDeg, gConfig.maxAttitudeDeg);
+
+  float rollErr = desiredRollDeg - rollDeg;
+  float pitchErr = desiredPitchDeg - pitchDeg;
+  rollCmd = updatePid(rollPid, rollErr, dt_s);
+  pitchCmd = updatePid(pitchPid, pitchErr, dt_s);
 }
 
 

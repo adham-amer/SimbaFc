@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimbaFc Test Page</title>
+    <script>
+        async function fetchData() {
+            try {
+                const response = await fetch('/data');
+                const data = await response.json();
+                document.getElementById('roll').innerText = data.roll.toFixed(2);
+                document.getElementById('pitch').innerText = data.pitch.toFixed(2);
+                document.getElementById('yaw').innerText = data.yaw.toFixed(2);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+        setInterval(fetchData, 500); // Fetch data every 500ms
+    </script>
+</head>
+<body>
+    <h1>SimbaFc Flight Controller Data</h1>
+    <p>Roll: <span id="roll">0.00</span>°</p>
+    <p>Pitch: <span id="pitch">0.00</span>°</p>
+    <p>Yaw: <span id="yaw">0.00</span>°</p>
+</body>
+</html>
