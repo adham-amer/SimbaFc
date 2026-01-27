@@ -15,12 +15,14 @@ uint32_t usToDuty(uint16_t us) {
   return static_cast<uint32_t>((static_cast<uint64_t>(us) * maxDuty) / periodUs);
 }
 
+// Map raw SBUS channel value to a servo pulse in microseconds.
 uint16_t sbusToUs(uint16_t ch) {
   float t = (static_cast<float>(ch) - kSbusMin) / (kSbusMax - kSbusMin);
   t = clampf(t, 0.0f, 1.0f);
   return static_cast<uint16_t>(kServoMinUs + t * (kServoMaxUs - kServoMinUs));
 }
 
+// Map PID command value to a servo pulse using configured output limits.
 uint16_t cmdToUs(float cmd) {
   const float span = gConfig.pidOutputMax - gConfig.pidOutputMin;
   if (span <= 0.0f) {
@@ -34,14 +36,8 @@ uint16_t cmdToUs(float cmd) {
 
 void setupServos() {
   for (uint8_t i = 0; i < kServoCount; ++i) {
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
     ledcAttach(kServoPins[i], kServoPwmHz, kServoPwmBits);
     ledcWrite(kServoPins[i], usToDuty(kServoCenterUs));
-#else
-    ledcSetup(kServoChannels[i], kServoPwmHz, kServoPwmBits);
-    ledcAttachPin(kServoPins[i], kServoChannels[i]);
-    ledcWrite(kServoChannels[i], usToDuty(kServoCenterUs));
-#endif
   }
 }
 
@@ -49,6 +45,7 @@ void writeServos() {
   for (uint8_t i = 0; i < kServoCount; ++i) {
     const uint8_t src = kServoMixer[i];
     uint16_t us = kServoCenterUs;
+    // Select input source for each servo: SBUS channel or PID command.
     if (src < 16) {
       us = sbusToUs(data.ch[src]);
     } else if (src == kMixerSrcRollCmd) {
@@ -56,10 +53,6 @@ void writeServos() {
     } else if (src == kMixerSrcPitchCmd) {
       us = cmdToUs(pitchCmd);
     }
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
     ledcWrite(kServoPins[i], usToDuty(us));
-#else
-    ledcWrite(kServoChannels[i], usToDuty(us));
-#endif
   }
 }
