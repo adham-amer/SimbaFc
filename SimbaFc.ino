@@ -1,81 +1,104 @@
 #include "Simba.h"
 #include "mixer.h"
-#include "web_page.h"
-#include <WiFi.h>
-#include <WebServer.h>
-
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 namespace {
-const char kApSsid[] = "SimbaFc";
-const char kApPass[] = "simbaconfig";
+constexpr size_t kLineBufLen = 160;
+char lineBuf[kLineBufLen];
+size_t lineLen = 0;
 
-WebServer server(80);
-
-void handleRoot() {
-  server.send(200, "text/html", kIndexHtml);
+float clampf(float v, float lo, float hi) {
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v;
 }
 
-void handleData() {
-  float rollDeg = filter.getRoll() - rollOffset;
-  float pitchDeg = filter.getPitch() - pitchOffset;
-  float yawDeg = filter.getYaw() - yawOffset;
-
-  String json = "{";
-  json += "\"roll\":" + String(rollDeg, 2) + ",";
-  json += "\"pitch\":" + String(pitchDeg, 2) + ",";
-  json += "\"yaw\":" + String(yawDeg, 2) + ",";
-  json += "\"desiredRoll\":" + String(desiredRollDeg, 2) + ",";
-  json += "\"desiredPitch\":" + String(desiredPitchDeg, 2) + ",";
-  json += "\"rollCmd\":" + String(rollCmd, 2) + ",";
-  json += "\"pitchCmd\":" + String(pitchCmd, 2) + ",";
-  json += "\"ch\":[";
-  for (int i = 0; i < 16; i++) {
-    json += String(data.ch[i]);
-    if (i < 15) json += ",";
+void printConfig() {
+  Serial.print("CFG ");
+  Serial.print("rollKp="); Serial.print(gConfig.rollKp, 4);
+  Serial.print(" rollKi="); Serial.print(gConfig.rollKi, 4);
+  Serial.print(" rollKd="); Serial.print(gConfig.rollKd, 4);
+  Serial.print(" pitchKp="); Serial.print(gConfig.pitchKp, 4);
+  Serial.print(" pitchKi="); Serial.print(gConfig.pitchKi, 4);
+  Serial.print(" pitchKd="); Serial.print(gConfig.pitchKd, 4);
+  Serial.print(" maxAttitudeDeg="); Serial.print(gConfig.maxAttitudeDeg, 2);
+  Serial.print(" mode1RateDegPerSec="); Serial.print(gConfig.mode1RateDegPerSec, 2);
+  Serial.print(" mode3StickThreshold="); Serial.print(gConfig.mode3StickThreshold, 3);
+  Serial.print(" pidOutputMin="); Serial.print(gConfig.pidOutputMin, 2);
+  Serial.print(" pidOutputMax="); Serial.print(gConfig.pidOutputMax, 2);
+  Serial.print(" mixer=");
+  for (uint8_t i = 0; i < kServoCount; ++i) {
+    if (i > 0) Serial.print(",");
+    const uint8_t src = gConfig.servoMixer[i];
+    if (src == kMixerSrcRollCmd) {
+      Serial.print("roll");
+    } else if (src == kMixerSrcPitchCmd) {
+      Serial.print("pitch");
+    } else {
+      Serial.print("ch");
+      Serial.print(src);
+    }
   }
-  json += "]}";
-  server.send(200, "application/json", json);
+  Serial.println();
 }
 
-void handleGetConfig() {
-  String json = "{";
-  json += "\"rollKp\":" + String(gConfig.rollKp, 3) + ",";
-  json += "\"rollKi\":" + String(gConfig.rollKi, 3) + ",";
-  json += "\"rollKd\":" + String(gConfig.rollKd, 3) + ",";
-  json += "\"pitchKp\":" + String(gConfig.pitchKp, 3) + ",";
-  json += "\"pitchKi\":" + String(gConfig.pitchKi, 3) + ",";
-  json += "\"pitchKd\":" + String(gConfig.pitchKd, 3) + ",";
-  json += "\"maxAttitudeDeg\":" + String(gConfig.maxAttitudeDeg, 2) + ",";
-  json += "\"mode1RateDegPerSec\":" + String(gConfig.mode1RateDegPerSec, 2) + ",";
-  json += "\"mode3StickThreshold\":" + String(gConfig.mode3StickThreshold, 2) + ",";
-  json += "\"pidOutputMin\":" + String(gConfig.pidOutputMin, 2) + ",";
-  json += "\"pidOutputMax\":" + String(gConfig.pidOutputMax, 2);
-  json += "}";
-  server.send(200, "application/json", json);
-}
-
-bool updateFloatArg(const char* name, float* value) {
-  if (!server.hasArg(name)) return false;
-  *value = server.arg(name).toFloat();
+bool parseFloat(const char* s, float* out) {
+  if (!s || !*s) return false;
+  *out = static_cast<float>(atof(s));
   return true;
 }
 
-void handlePostConfig() {
-  bool changed = false;
-  changed |= updateFloatArg("rollKp", &gConfig.rollKp);
-  changed |= updateFloatArg("rollKi", &gConfig.rollKi);
-  changed |= updateFloatArg("rollKd", &gConfig.rollKd);
-  changed |= updateFloatArg("pitchKp", &gConfig.pitchKp);
-  changed |= updateFloatArg("pitchKi", &gConfig.pitchKi);
-  changed |= updateFloatArg("pitchKd", &gConfig.pitchKd);
-  changed |= updateFloatArg("maxAttitudeDeg", &gConfig.maxAttitudeDeg);
-  changed |= updateFloatArg("mode1RateDegPerSec", &gConfig.mode1RateDegPerSec);
-  changed |= updateFloatArg("mode3StickThreshold", &gConfig.mode3StickThreshold);
-  changed |= updateFloatArg("pidOutputMin", &gConfig.pidOutputMin);
-  changed |= updateFloatArg("pidOutputMax", &gConfig.pidOutputMax);
+bool setMixerEntry(uint8_t index, const char* value) {
+  if (index >= kServoCount || value == nullptr) return false;
+  if (strcasecmp(value, "roll") == 0) {
+    gConfig.servoMixer[index] = kMixerSrcRollCmd;
+    return true;
+  }
+  if (strcasecmp(value, "pitch") == 0) {
+    gConfig.servoMixer[index] = kMixerSrcPitchCmd;
+    return true;
+  }
+  if (value[0] == 'c' || value[0] == 'C') {
+    if (value[1] == 'h' || value[1] == 'H') {
+      int ch = atoi(value + 2);
+      if (ch >= 0 && ch < 16) {
+        gConfig.servoMixer[index] = static_cast<uint8_t>(ch);
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
-  gConfig.maxAttitudeDeg = constrain(gConfig.maxAttitudeDeg, 1.0f, 90.0f);
-  gConfig.mode1RateDegPerSec = constrain(gConfig.mode1RateDegPerSec, 1.0f, 360.0f);
-  gConfig.mode3StickThreshold = constrain(gConfig.mode3StickThreshold, 0.0f, 1.0f);
+void handleSetCommand(char* args) {
+  bool changed = false;
+  char* tok = strtok(args, " ");
+  while (tok) {
+    char* eq = strchr(tok, '=');
+    if (eq) {
+      *eq = '\0';
+      const char* key = tok;
+      const char* val = eq + 1;
+      float f = 0.0f;
+      if (strcmp(key, "rollKp") == 0 && parseFloat(val, &f)) { gConfig.rollKp = f; changed = true; }
+      else if (strcmp(key, "rollKi") == 0 && parseFloat(val, &f)) { gConfig.rollKi = f; changed = true; }
+      else if (strcmp(key, "rollKd") == 0 && parseFloat(val, &f)) { gConfig.rollKd = f; changed = true; }
+      else if (strcmp(key, "pitchKp") == 0 && parseFloat(val, &f)) { gConfig.pitchKp = f; changed = true; }
+      else if (strcmp(key, "pitchKi") == 0 && parseFloat(val, &f)) { gConfig.pitchKi = f; changed = true; }
+      else if (strcmp(key, "pitchKd") == 0 && parseFloat(val, &f)) { gConfig.pitchKd = f; changed = true; }
+      else if (strcmp(key, "maxAttitudeDeg") == 0 && parseFloat(val, &f)) { gConfig.maxAttitudeDeg = f; changed = true; }
+      else if (strcmp(key, "mode1RateDegPerSec") == 0 && parseFloat(val, &f)) { gConfig.mode1RateDegPerSec = f; changed = true; }
+      else if (strcmp(key, "mode3StickThreshold") == 0 && parseFloat(val, &f)) { gConfig.mode3StickThreshold = f; changed = true; }
+      else if (strcmp(key, "pidOutputMin") == 0 && parseFloat(val, &f)) { gConfig.pidOutputMin = f; changed = true; }
+      else if (strcmp(key, "pidOutputMax") == 0 && parseFloat(val, &f)) { gConfig.pidOutputMax = f; changed = true; }
+    }
+    tok = strtok(nullptr, " ");
+  }
+
+  gConfig.maxAttitudeDeg = clampf(gConfig.maxAttitudeDeg, 1.0f, 90.0f);
+  gConfig.mode1RateDegPerSec = clampf(gConfig.mode1RateDegPerSec, 1.0f, 360.0f);
+  gConfig.mode3StickThreshold = clampf(gConfig.mode3StickThreshold, 0.0f, 1.0f);
   if (gConfig.pidOutputMin > gConfig.pidOutputMax) {
     float tmp = gConfig.pidOutputMin;
     gConfig.pidOutputMin = gConfig.pidOutputMax;
@@ -85,24 +108,88 @@ void handlePostConfig() {
   if (changed) {
     applyConfig();
     saveConfig();
+    Serial.println("OK");
+  } else {
+    Serial.println("ERR no changes");
   }
-  handleGetConfig();
 }
 
-void startAccessPoint() {
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(kApSsid, kApPass);
+void handleMixCommand(char* args) {
+  bool changed = false;
+  char* tok = strtok(args, " ");
+  while (tok) {
+    char* eq = strchr(tok, '=');
+    if (eq) {
+      *eq = '\0';
+      int idx = atoi(tok);
+      if (idx >= 0 && idx < kServoCount) {
+        if (setMixerEntry(static_cast<uint8_t>(idx), eq + 1)) {
+          changed = true;
+        }
+      }
+    }
+    tok = strtok(nullptr, " ");
+  }
+
+  if (changed) {
+    applyConfig();
+    saveConfig();
+    Serial.println("OK");
+  } else {
+    Serial.println("ERR mix");
+  }
 }
 
-void setupWebServer() {
-  server.on("/", handleRoot);
-  server.on("/data", HTTP_GET, handleData);
-  server.on("/config", HTTP_GET, handleGetConfig);
-  server.on("/config", HTTP_POST, handlePostConfig);
-  server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
-  server.begin();
+void handleLine(char* line) {
+  while (*line == ' ') ++line;
+  if (*line == '\0') return;
+
+  if (strcasecmp(line, "GET") == 0) {
+    printConfig();
+    return;
+  }
+  if (strcasecmp(line, "HELP") == 0) {
+    Serial.println("CMD GET");
+    Serial.println("CMD SET key=val ...");
+    Serial.println("CMD MIX index=roll|pitch|chN ...");
+    return;
+  }
+
+  char* space = strchr(line, ' ');
+  if (!space) {
+    Serial.println("ERR cmd");
+    return;
+  }
+  *space = '\0';
+  char* args = space + 1;
+  if (strcasecmp(line, "SET") == 0) {
+    handleSetCommand(args);
+  } else if (strcasecmp(line, "MIX") == 0) {
+    handleMixCommand(args);
+  } else {
+    Serial.println("ERR cmd");
+  }
 }
+
+void pollSerialConfig() {
+  while (Serial.available() > 0) {
+    const int c = Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n') {
+      lineBuf[lineLen] = '\0';
+      handleLine(lineBuf);
+      lineLen = 0;
+      continue;
+    }
+    if (lineLen + 1 < kLineBufLen) {
+      lineBuf[lineLen++] = static_cast<char>(c);
+    } else {
+      lineLen = 0;
+      Serial.println("ERR line");
+    }
+  }
 }
+}  // namespace
 
 void setup() {
   setupTimer();
@@ -133,10 +220,9 @@ void setup() {
   zeroAttitude();
 
   setupServos();
+  setDefaultConfig();
   loadConfig();
   applyConfig();
-  startAccessPoint();
-  setupWebServer();
   
   sbus_rx.Begin();
   lastTimeUs = micros();
@@ -218,6 +304,7 @@ void loop() {
     Serial.println(String("DesiredPitchDeg:") + String(desiredPitchDeg));
     Serial.println(String("RollCmd:") + String(rollCmd));
     Serial.println(String("PitchCmd:") + String(pitchCmd));
+    pollSerialConfig();
   }
-  server.handleClient();
+  
 }

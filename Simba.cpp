@@ -23,15 +23,7 @@ float rollOffset = 0.0f;
 float pitchOffset = 0.0f;
 float yawOffset = 0.0f;
 
-Config gConfig = {
-  kRollKp, kRollKi, kRollKd,
-  kPitchKp, kPitchKi, kPitchKd,
-  kMaxAttitudeDeg,
-  kMode1RateDegPerSec,
-  kMode3StickThreshold,
-  kPidOutputMin,
-  kPidOutputMax
-};
+Config gConfig = {};
 
 ControlMode activeMode = ControlMode::Stabilized;
 float desiredRollDeg = 0.0f;
@@ -136,11 +128,32 @@ void applyConfig() {
   pitchPid.prevErr = 0.0f;
 }
 
+void setDefaultConfig() {
+  gConfig.rollKp = kRollKp;
+  gConfig.rollKi = kRollKi;
+  gConfig.rollKd = kRollKd;
+  gConfig.pitchKp = kPitchKp;
+  gConfig.pitchKi = kPitchKi;
+  gConfig.pitchKd = kPitchKd;
+  gConfig.maxAttitudeDeg = kMaxAttitudeDeg;
+  gConfig.mode1RateDegPerSec = kMode1RateDegPerSec;
+  gConfig.mode3StickThreshold = kMode3StickThreshold;
+  gConfig.pidOutputMin = kPidOutputMin;
+  gConfig.pidOutputMax = kPidOutputMax;
+  for (uint8_t i = 0; i < kServoCount; ++i) {
+    gConfig.servoMixer[i] = kDefaultServoMixer[i];
+  }
+}
+
 bool loadConfig() {
   Preferences prefs;
   prefs.begin("simba", true);
   size_t read = prefs.getBytes("cfg", &gConfig, sizeof(gConfig));
   prefs.end();
+  if (read != sizeof(gConfig)) {
+    setDefaultConfig();
+    return false;
+  }
   return read == sizeof(gConfig);
 }
 

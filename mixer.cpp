@@ -43,7 +43,7 @@ void setupServos() {
 
 void writeServos() {
   for (uint8_t i = 0; i < kServoCount; ++i) {
-    const uint8_t src = kServoMixer[i];
+    const uint8_t src = gConfig.servoMixer[i];
     uint16_t us = kServoCenterUs;
     // Select input source for each servo: SBUS channel or PID command.
     if (src < 16) {

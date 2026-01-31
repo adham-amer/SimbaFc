@@ -72,6 +72,7 @@ ControlMode decodeMode(uint16_t ch);
 float normalizeSbus(uint16_t ch);
 void updateControl(float dt_s);
 void applyConfig();
+void setDefaultConfig();
 
 void zeroAttitude() ;
 

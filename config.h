@@ -66,6 +66,16 @@ constexpr float kPitchKd = 0.08f;
 constexpr float kPidOutputMin = -90.0f;
 constexpr float kPidOutputMax = 90.0f;
 
+// ====== SERVO MIXER ======
+constexpr uint8_t kServoCount = 7;
+// Mixer source IDs: 0..15 = SBUS ch, 16 = roll PID, 17 = pitch PID.
+constexpr uint8_t kMixerSrcRollCmd = 16;
+constexpr uint8_t kMixerSrcPitchCmd = 17;
+// Default mixer: index is servo output 0..6, value is mixer source ID.
+constexpr uint8_t kDefaultServoMixer[kServoCount] = {
+  kMixerSrcRollCmd, kMixerSrcPitchCmd, 2, 3, 4, 5, 6
+};
+
 struct Config {
   float rollKp;
   float rollKi;
@@ -78,4 +88,5 @@ struct Config {
   float mode3StickThreshold;
   float pidOutputMin;
   float pidOutputMax;
+  uint8_t servoMixer[kServoCount];
 };
